@@ -39,7 +39,21 @@ jobs:
           java-version: "17"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMGR=$(find "$SDK_ROOT/cmdline-tools" -name "sdkmanager" -type f 2>/dev/null | head -n 1 || true)
+          if [ -z "$SDKMGR" ]; then
+            SDKMGR=$(command -v sdkmanager || true)
+          fi
+          if [ -z "$SDKMGR" ]; then
+            echo "sdkmanager not found under $SDK_ROOT"
+            exit 1
+          fi
+          echo "Using sdkmanager: $SDKMGR"
+          (yes || true) | "$SDKMGR" --sdk_root="$SDK_ROOT" --licenses >/dev/null 2>&1 || true
+          "$SDKMGR" --sdk_root="$SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -58,8 +72,9 @@ jobs:
             echo "APK not found at $APK_PATH"
             exit 1
           fi
-          APK_MB=$(du -m "$APK_PATH" | cut -f1)
-          echo "Built APK size: ${APK_MB} MB"
+          APK_BYTES=$(stat -c%s "$APK_PATH")
+          APK_MB=$(awk "BEGIN {printf \"%.2f\", $APK_BYTES / 1048576}")
+          echo "Built APK size: ${APK_MB} MB (${APK_BYTES} bytes)"
 
       - name: Upload APK to GitHub Actions Artifacts
         uses: actions/upload-artifact@v4

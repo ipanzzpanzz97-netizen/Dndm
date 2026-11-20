@@ -136,13 +136,13 @@ def bake_white_tile(size: int = 4096) -> dict:
     gy = (yy % step < grout_w) | (yy % step > step - grout_w)
     grout = gx | gy
 
-    base = 234.0 + (fbm - 0.5) * 14.0 + (grain - 0.02) * 160.0
-    albedo = np.stack([base, base + 1.0, base - 2.0], axis=-1)
-    grout_col = np.array([150.0, 154.0, 148.0], dtype=np.float32) + grain[..., None] * 600.0
+    base = 200.0 + (fbm - 0.5) * 14.0 + (grain - 0.02) * 140.0
+    albedo = np.stack([base, base + 4.0, base - 2.0], axis=-1)
+    grout_col = np.array([112.0, 117.0, 111.0], dtype=np.float32) + grain[..., None] * 500.0
     albedo[grout] = grout_col[grout]
 
     height = np.where(grout, 0.15 + grain * 2.0, 0.92 + fbm * 0.05 + grain * 0.4)
-    roughness = np.where(grout, 0.88, 0.14 + fbm * 0.08 + grain * 0.5)
+    roughness = np.where(grout, 0.90, 0.28 + fbm * 0.10 + grain * 0.5)
     ao = np.where(grout, 0.45, 0.96 - (1.0 - fbm) * 0.05)
 
     return save_pbr_set("white_tile", albedo, height, roughness, ao, normal_strength=4.5, compress_level=2)
@@ -163,12 +163,12 @@ def bake_orange_terracotta(size: int = 4096) -> dict:
     border = (np.abs(lx) > 0.46) | (np.abs(ly) > 0.46)
     ring = np.abs(rad - oct_r) < 0.022
 
-    r = np.full((size, size), 217.0, dtype=np.float32)
-    g = np.full((size, size), 138.0, dtype=np.float32)
-    b = np.full((size, size), 108.0, dtype=np.float32)
+    r = np.full((size, size), 194.0, dtype=np.float32)
+    g = np.full((size, size), 116.0, dtype=np.float32)
+    b = np.full((size, size), 86.0, dtype=np.float32)
 
-    r[in_star], g[in_star], b[in_star] = 232.0, 164.0, 136.0
-    r[ring | border], g[ring | border], b[ring | border] = 178.0, 96.0, 70.0
+    r[in_star], g[in_star], b[in_star] = 212.0, 141.0, 111.0
+    r[ring | border], g[ring | border], b[ring | border] = 141.0, 67.0, 43.0
 
     noise_shift = (fbm - 0.5) * 26.0 + (grain - 0.03) * 220.0
     albedo = np.stack([r + noise_shift, g + noise_shift * 0.8, b + noise_shift * 0.7], axis=-1)
@@ -197,12 +197,12 @@ def bake_subway_tile(size: int = 2048) -> dict:
     dy_edge = np.minimum(y_in, rh - y_in) / float(rh * 0.18)
     bevel = np.clip(np.minimum(dx_edge, dy_edge), 0.0, 1.0)
 
-    base = 226.0 + (fbm - 0.5) * 14.0 + (grain - 0.025) * 150.0 + bevel * 10.0
-    albedo = np.stack([base, base + 2.0, base - 1.0], axis=-1)
-    albedo[grout] = np.array([142.0, 146.0, 142.0], dtype=np.float32)
+    base = 198.0 + (fbm - 0.5) * 14.0 + (grain - 0.025) * 130.0 + bevel * 10.0
+    albedo = np.stack([base, base + 4.0, base - 2.0], axis=-1)
+    albedo[grout] = np.array([112.0, 117.0, 111.0], dtype=np.float32)
 
     height = np.where(grout, 0.12, 0.45 + bevel * 0.5 + grain * 0.3)
-    roughness = np.where(grout, 0.9, 0.18 + fbm * 0.08)
+    roughness = np.where(grout, 0.90, 0.28 + fbm * 0.10)
     ao = np.where(grout, 0.42, 0.78 + bevel * 0.22)
 
     return save_pbr_set("subway_tile", albedo, height, roughness, ao, normal_strength=4.5, compress_level=2)
@@ -222,13 +222,13 @@ def bake_marble_vein(size: int = 4096) -> dict:
     vein_mask = np.clip(1.0 - np.power(vein_wave, 0.22), 0.0, 1.0) * 0.75 + \
                 np.clip(1.0 - np.power(vein_fine, 0.15), 0.0, 1.0) * 0.35
 
-    base_r = 238.0 - vein_mask * 95.0 + (grain - 0.015) * 140.0
-    base_g = 240.0 - vein_mask * 88.0 + (grain - 0.015) * 140.0
-    base_b = 236.0 - vein_mask * 82.0 + (grain - 0.015) * 140.0
+    base_r = 216.0 - vein_mask * 90.0 + (grain - 0.015) * 120.0
+    base_g = 218.0 - vein_mask * 84.0 + (grain - 0.015) * 120.0
+    base_b = 214.0 - vein_mask * 78.0 + (grain - 0.015) * 120.0
     albedo = np.stack([base_r, base_g, base_b], axis=-1)
 
     height = 0.85 - vein_mask * 0.15 + grain * 0.25
-    roughness = 0.12 + vein_mask * 0.14 + fbm2 * 0.06
+    roughness = 0.22 + vein_mask * 0.16 + fbm2 * 0.06
     ao = 0.98 - vein_mask * 0.18
 
     return save_pbr_set("marble_vein", albedo, height, roughness, ao, normal_strength=1.8, compress_level=2)
@@ -417,9 +417,9 @@ def main() -> None:
     materials["fluted_wood"] = bake_wood("fluted_wood", (110, 102, 92), (56, 52, 46), size=2048, seed=601)
     materials["dark_wood"] = bake_wood("dark_wood", (105, 62, 34), (58, 32, 16), size=2048, seed=602)
     materials["grey_vinyl_wood"] = bake_wood("grey_vinyl_wood", (82, 86, 90), (36, 39, 42), size=2048, seed=603, plank_grooves=True)
-    materials["lime_plaster"] = bake_plaster("lime_plaster", (197, 220, 59), 0.64, size=2048, seed=701)
-    materials["cream_plaster"] = bake_plaster("cream_plaster", (236, 235, 228), 0.76, size=2048, seed=702)
-    materials["rough_cement"] = bake_plaster("rough_cement", (158, 149, 131), 0.90, size=2048, seed=703, aged=True)
+    materials["lime_plaster"] = bake_plaster("lime_plaster", (181, 198, 66), 0.78, size=2048, seed=701)
+    materials["cream_plaster"] = bake_plaster("cream_plaster", (210, 208, 200), 0.84, size=2048, seed=702)
+    materials["rough_cement"] = bake_plaster("rough_cement", (138, 131, 117), 0.92, size=2048, seed=703, aged=True)
     materials["woven_fabric"] = bake_woven_fabric(2048)
 
     audio = bake_audio_pack()
@@ -430,7 +430,7 @@ def main() -> None:
     # Ensure >= 110MB target if aggressive PNG compression reduced size unexpectedly
     if total_mb < 110.0:
         print(f"[BakeHD] Saiz semasa {total_mb:.2f} MB < 110 MB, menambah resolusi 4K tambahan...")
-        materials["rough_cement"] = bake_plaster("rough_cement", (158, 149, 131), 0.90, size=4096, seed=703, aged=True)
+        materials["rough_cement"] = bake_plaster("rough_cement", (138, 131, 117), 0.92, size=4096, seed=703, aged=True)
         materials["grey_vinyl_wood"] = bake_wood("grey_vinyl_wood", (82, 86, 90), (36, 39, 42), size=4096, seed=603, plank_grooves=True)
         total_bytes = sum(f.stat().st_size for f in OUT_DIR.glob("*") if f.is_file() and f.name != "manifest.json")
         total_mb = total_bytes / (1024.0 * 1024.0)
