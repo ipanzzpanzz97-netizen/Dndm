@@ -1,0 +1,6 @@
+{
+  "name": "Rumah 3D Walkthrough",
+  "description": "Simulasi 3D Walkthrough rumah sebenar ultra-terperinci merangkumi Zon Dapur, Ruang Tengah & Kerja, Ruang Tamu Utama, dan Koridor Tepi dengan enjin Three.js PBR serta sokongan binaan APK Android.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

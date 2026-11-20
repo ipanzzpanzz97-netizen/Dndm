@@ -1,0 +1,33 @@
+Tonton keseluruhan rakaman video rumah ini dengan teliti dan bina SATU WORKSPACE PROJEK LENGKAP (Kotlin Android + Enjin 3D Three.js Ultra-Detail + Pembina Aset HD >100MB + GitHub Actions APK Release) tanpa sebarang placeholder atau kod ringkas.
+
+====================================================================
+1. PEMETAAN SENI BINA & PERABOT MULTI-KOMPONEN IKUT VIDEO (WAJIB TEPAT)
+====================================================================
+DILARANG membina perabot menggunakan satu kotak kosong (single BoxGeometry). Setiap perabot, pintu, tingkap, dan perkakas WAJIB dibina melalui fungsi modular (6–20 sub-mesh berstruktur termasuk bingkai, kaki, pemegang, tombol, engsel, kusyen tepi bulat Extrude/RoundedBox, paip lengkung TubeGeometry, dan alunan kain gelombang Sine-wave):
+
+- ZON 1 (DAPUR): Lantai jubin putih berkilat bergarisan simen lekuk, dinding backsplash jubin bata putih timbul, tabletop konkrit bentuk-U, sinki keluli berkembar berlekuk dalam + kepala paip melengkung, rak pinggan besi hitam 2 tingkat di hadapan tingkap gelangsar berkaca gelap, dapur gas 2 tungku lengkap jeriji besi & tombol + tong gas hijau bersalur paip di bawah, lubang ekzos bulat di dinding kiri, pintu kayu belakang lengkap kusen/tombol + kuali melengkung tergantung, kabinet gantung berbingkai putih pintu kaca gelap memantul, deretan almari putih 2 pintu berpemegang, periuk nasi ungu, dan peti sejuk 2 pintu kelabu metalik.
+- ZON 2 (RUANG TENGAH & KERJA): Lantai corak geometri oren-terracotta timbul, tiang dinding kuning-limau bertekstur cat halus, peti sejuk hitam berkilat, meja lipat marmar berkaki besi silang, rak buku kayu bertingkat penuh dengan susunan buku 3D, meja kerja lengkap monitor/papan kekunci/kerusi pejabat beroda, unit aircond berbilah 3D di atas langsir putih beralun gelombang, kabinet kayu gelap dengan microwave berpanel kaca, dan pintu bilik air kelabu berpanel lekuk.
+- ZON 3 (RUANG TAMU UTAMA): Plaster siling bertingkat (tray ceiling) lengkap downlight & lampu gantung chandelier berstruktur tengah, dinding wallpaper corak daun pelepah bertekstur tenun, jalur panel kayu menegak (3D fluted wall panel menggunakan susunan bilah geometri timbul sebenar, BUKAN lukisan rata), dinding TV marmar putih-kelabu berkilat, kabinet TV gantung kayu gelap berlaci, TV skrin rata berbingkai nipis, meja PC di sebelah kiri TV, sofa panjang berkusyen bulat dengan bantal sandar berasingan, 2 kerusi kayu berukir berkusyen coklat, pintu utama kayu gelap berpanel, tingkap berlangsir dua lapis beralun, serta kambi lantai (skirting) dan cornice siling di semua dinding.
+- ZON 4 (KORIDOR TEPI & BILIK AIR BELAKANG): Bukaan pintu berbingkai merah dari dapur menuju lantai urat kayu kelabu gelap berlekuk, dinding simen kasar, kerusi besi lipat, dan ruang basuhan hujung berdinding separuh lengkap baldi merah & paip air.
+
+====================================================================
+2. ENJIN GRAFIK ULTRA-HD, TEKSTUR PBR 4K & KAWALAN GAME
+====================================================================
+Di dalam `app/src/main/assets/index.html`:
+- Gunakan WebGLRenderer (ACESFilmicToneMapping, SRGBColorSpace, PCFSoftShadowMap 2048x2048, PMREMGenerator RoomEnvironment, serta EffectComposer dengan UnrealBloomPass & SSAOPass untuk bayang celah bucu dinding yang realistik).
+- Sistem Tekstur Hibrid 4K: Muatkan fail tekstur 4K PBR (`Albedo`, `NormalMap`, `RoughnessMap`, `AOMap` daripada folder `hd_pack/`) menggunakan TextureLoader dengan fallback automatik kepada penjana CanvasTexture prosedural 2048x2048 (lengkap micro-grain, urat marmar/kayu berlapis, tenunan kain, dan bumpMap tajam) supaya pratonton terus hidup di pelayar AI Studio dan mencapai kualiti penuh di dalam APK.
+- Kawalan First-Person penuh: WASD + Tetikus (PC) dan Dwi-Sentuh Joystick Kiri + Sapuan Kamera Kanan (Android), lengkap collision Box3 tepat, goyangan langkah semula jadi (head-bob), serta audio tapak kaki mengikut jenis lantai (jubin/kayu/simen).
+
+====================================================================
+3. WORKSPACE KOTLIN ANDROID + PEMBINA PEK ASET >100MB + GITHUB WORKFLOW
+====================================================================
+Jana keseluruhan fail workspace berikut dengan kod penuh:
+1. `settings.gradle.kts` & `build.gradle.kts` (AGP 8.5+, Kotlin 1.9.24).
+2. `app/build.gradle.kts` (minSdk 24, targetSdk 34, dan wajib aktifkan `androidResources { noCompress += listOf("png", "wav", "bmp") }` supaya pek tekstur 4K & audio HD kekal kualiti penuh tanpa mampatan di dalam APK).
+3. `app/src/main/AndroidManifest.xml` (orientasi sensorLandscape, hardwareAccelerated="true", largeHeap="true").
+4. `app/src/main/java/com/rumah3d/game/MainActivity.kt` (Kotlin skrin penuh Immersive Sticky Mode, WebView WebGL berprestasi tinggi memuatkan `file:///android_asset/index.html`).
+5. `scripts/bake_hd_assets.py` (Skrip Python standard library/Pillow/NumPy yang dijalankan semasa bina untuk menjana set lengkap peta tekstur PBR 4K 2048px-4096px Albedo/Normal/Roughness/AO bagi semua bahan rumah serta fail audio ruang/tapak kaki WAV 48kHz ke dalam `app/src/main/assets/hd_pack/` sehingga jumlah aset berkualiti tinggi mencecah 110MB–150MB).
+6. `.gitignore` (abaikan `build/`, `.gradle/`, dan `app/src/main/assets/hd_pack/` supaya `git push` dari AI Studio ke GitHub kekal bawah 5MB dan tidak terkena sekatan 100MB GitHub).
+7. `.github/workflows/build-apk.yml` (GitHub Actions dengan `permissions: contents: write` yang memasang Python + JDK 17 + `gradle/actions/setup-gradle@v4` versi `8.9`, menjalankan `python3 scripts/bake_hd_assets.py` untuk membakar aset >100MB terus ke dalam folder assets, membina `gradle assembleDebug`, dan memuat naik fail APK >100MB siap bina ke GitHub Actions Artifacts & GitHub Releases).
+
+Pastikan setiap fail ditulis lengkap dari baris pertama hingga baris terakhir tanpa sebarang bahagian yang dipotong.

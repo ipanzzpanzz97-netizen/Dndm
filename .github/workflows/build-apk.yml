@@ -1,0 +1,83 @@
+name: Build Android APK (>100MB HD Pack)
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python imaging & math dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install numpy pillow
+
+      - name: Bake 4K PBR Textures & 48kHz Audio (>100MB HD Pack)
+        run: |
+          python3 scripts/bake_hd_assets.py
+          du -sh app/src/main/assets/hd_pack/
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build Debug APK
+        run: |
+          gradle assembleDebug --no-daemon --stacktrace
+          ls -lh app/build/outputs/apk/debug/
+
+      - name: Verify APK Size (>100MB)
+        run: |
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "APK not found at $APK_PATH"
+            exit 1
+          fi
+          APK_MB=$(du -m "$APK_PATH" | cut -f1)
+          echo "Built APK size: ${APK_MB} MB"
+
+      - name: Upload APK to GitHub Actions Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rumah3D-Walkthrough-HD-Debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Publish APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Rumah 3D Walkthrough HD APK (Build #${{ github.run_number }})
+          body: |
+            Binaan automatik APK Android **Rumah 3D Walkthrough Ultra-Detail**.
+            - Enjin 3D Three.js PBR (ACESFilmic, PCFSoftShadowMap 2048x2048, RoomEnvironment, SSAO + Bloom)
+            - Pek Aset Tekstur PBR 4K & Audio 48kHz Stereo (>100MB tanpa mampatan)
+            - Kawalan Dwi-Sentuh Joystick & Sapuan Kamera (Sensor Landscape)
+          files: app/build/outputs/apk/debug/app-debug.apk
+          draft: false
+          prerelease: false

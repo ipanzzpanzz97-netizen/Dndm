@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>3D Walkthrough Rumah Sebenar</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body { overflow: hidden; background: #0b0e14; font-family: system-ui, -apple-system, sans-serif; color: #fff; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    #hud {
+      position: fixed; top: 16px; left: 16px; z-index: 10;
+      background: rgba(12, 16, 24, 0.78); backdrop-filter: blur(8px);
+      padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.14);
+      max-width: 330px; pointer-events: none;
+    }
+    #hud h1 { font-size: 15px; font-weight: 700; color: #ffd54f; margin-bottom: 4px; }
+    #hud p { font-size: 12px; line-height: 1.45; color: #d0d7de; }
+    #roomTag {
+      display: inline-block; margin-top: 8px; padding: 4px 10px;
+      background: rgba(0, 229, 255, 0.16); border: 1px solid rgba(0, 229, 255, 0.45);
+      border-radius: 999px; font-size: 12px; font-weight: 600; color: #7ce8ff;
+    }
+
+    #crosshair {
+      position: fixed; top: 50%; left: 50%; width: 8px; height: 8px;
+      transform: translate(-50%, -50%); border-radius: 50%;
+      background: rgba(255,255,255,0.75); box-shadow: 0 0 6px rgba(0,0,0,0.8);
+      z-index: 9; pointer-events: none;
+    }
+
+    /* Kawalan Sentuh Telefon */
+    #joyZone {
+      position: fixed; bottom: 26px; left: 26px; width: 120px; height: 120px;
+      border-radius: 50%; background: rgba(255,255,255,0.08);
+      border: 2px solid rgba(255,255,255,0.22); z-index: 12; touch-action: none;
+    }
+    #joyKnob {
+      position: absolute; top: 35px; left: 35px; width: 50px; height: 50px;
+      border-radius: 50%; background: rgba(255, 213, 79, 0.75);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    }
+    #lookZone {
+      position: fixed; top: 0; right: 0; width: 55vw; height: 100vh;
+      z-index: 8; touch-action: none;
+    }
+    #camBtns {
+      position: fixed; top: 16px; right: 16px; z-index: 15; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
+    }
+    .tp-btn {
+      background: rgba(20, 26, 36, 0.85); color: #fff; border: 1px solid rgba(255,255,255,0.2);
+      padding: 7px 11px; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600;
+    }
+    .tp-btn:hover { background: rgba(255, 213, 79, 0.25); border-color: #ffd54f; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="hud">
+    <h1>🏠 Simulasi 3D Rumah Anda</h1>
+    <p><b>PC:</b> Klik skrin + WASD / Anak Panah + Tetikus<br><b>Telefon:</b> Gerak Joystick kiri & seret skrin kanan</p>
+    <div id="roomTag">📍 Ruang: Dapur</div>
+  </div>
+
+  <div id="camBtns">
+    <button class="tp-btn" data-pos="0,1.62,4.2,0">Dapur</button>
+    <button class="tp-btn" data-pos="0.4,1.62,-0.8,0">Ruang Tengah</button>
+    <button class="tp-btn" data-pos="-3.5,1.62,-4.5,1.57">Ruang Tamu</button>
+    <button class="tp-btn" data-pos="-4.8,1.62,4.2,3.14">Laluan Tepi</button>
+  </div>
+
+  <div id="crosshair"></div>
+  <div id="joyZone"><div id="joyKnob"></div></div>
+  <div id="lookZone"></div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+    // =========================================================
+    // 1. PERSediaan RENDERER GRAFIK TINGGI (PBR + SOFT SHADOWS)
+    // =========================================================
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0f17);
+    scene.fog = new THREE.FogExp2(0x0b0f17, 0.022);
+
+    const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.08, 60);
+    camera.rotation.order = 'YXZ';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.45;
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.22, // kekuatan bloom lembut untuk lampu siling
+      0.45,
+      0.88
+    );
+    composer.addPass(bloomPass);
+
+    // =========================================================
+    // 2. PENJANA TEKSTUR PROSEDURAL + BUMP MAP (ANTI-DATAR)
+    // =========================================================
+    function createProceduralMaterial(drawFn, { repeatX = 1, repeatY = 1, roughness = 0.5, metalness = 0.05, bumpScale = 0.015 } = {}) {
+      const colorCanvas = document.createElement('canvas');
+      const bumpCanvas = document.createElement('canvas');
+      colorCanvas.width = bumpCanvas.width = 512;
+      colorCanvas.height = bumpCanvas.height = 512;
+
+      const cCtx = colorCanvas.getContext('2d');
+      const bCtx = bumpCanvas.getContext('2d');
+      drawFn(cCtx, bCtx, 512, 512);
+
+      const map = new THREE.CanvasTexture(colorCanvas);
+      const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+      map.colorSpace = THREE.SRGBColorSpace;
+
+      [map, bumpMap].forEach(t => {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(repeatX, repeatY);
+        t.anisotropy = 8;
+      });
+
+      return new THREE.MeshStandardMaterial({
+        map,
+        bumpMap,
+        bumpScale,
+        roughness,
+        metalness
+      });
+    }
+
+    // (A) Jubin Putih Dapur & Ruang Tamu
+    const matWhiteTile = (rx, ry, rough = 0.22) => createProceduralMaterial((c, b, w, h) => {
+      c.fillStyle = '#e7e9e4'; c.fillRect(0, 0, w, h);
+      b.fillStyle = '#ffffff'; b.fillRect(0, 0, w, h);
+      for (let i = 0; i < 900; i++) {
+        const x = Math.random() * w, y = Math.random() * h;
+        c.fillStyle = `rgba(190,195,190,${Math.random() * 0.14})`;
+        c.fillRect(x, y, 6, 6);
+      }
+      c.strokeStyle = '#9aa09a'; c.lineWidth = 6;
+      b.strokeStyle = '#222222'; b.lineWidth = 8;
+      const step = w / 2;
+      for (let i = 0; i <= w; i += step) {
+        c.beginPath(); c.moveTo(i, 0); c.lineTo(i, h); c.stroke();
+        c.beginPath(); c.moveTo(0, i); c.lineTo(w, i); c.stroke();
+        b.beginPath(); b.moveTo(i, 0); b.lineTo(i, h); b.stroke();
+        b.beginPath(); b.moveTo(0, i); b.lineTo(w, i); b.stroke();
+      }
+    }, { repeatX: rx, repeatY: ry, roughness: rough, bumpScale: 0.018 });
+
+    // (B) Lantai Oren-Terracotta Corak Geometri (Ruang Tengah)
+    const matOrangeFloor = createProceduralMaterial((c, b, w, h) => {
+      c.fillStyle = '#d98a6c'; c.fillRect(0, 0, w, h);
+      b.fillStyle = '#b0b0b0'; b.fillRect(0, 0, w, h);
+      const grid = w / 2;
+      for (let gx = 0; gx < 2; gx++) {
+        for (let gy = 0; gy < 2; gy++) {
+          const cx = gx * grid + grid / 2, cy = gy * grid + grid / 2;
+          c.strokeStyle = '#b96548'; c.lineWidth = 10;
+          c.strokeRect(gx * grid + 10, gy * grid + 10, grid - 20, grid - 20);
+          c.fillStyle = '#e7a488';
+          c.beginPath();
+          for (let a = 0; a < 8; a++) {
+            const ang = (a / 8) * Math.PI * 2 + Math.PI / 8;
+            const px = cx + Math.cos(ang) * 78, py = cy + Math.sin(ang) * 78;
+            a === 0 ? c.moveTo(px, py) : c.lineTo(px, py);
+          }
+          c.closePath(); c.fill(); c.stroke();
+          b.strokeStyle = '#555'; b.lineWidth = 6;
+          b.strokeRect(gx * grid + 8, gy * grid + 8, grid - 16, grid - 16);
+        }
+      }
+    }, { repeatX: 4, repeatY: 5, roughness: 0.38, bumpScale: 0.012 });
+
+    // (C) Jubin Bata Putih Backsplash Dapur
+    const matSubwayTile = createProceduralMaterial((c, b, w, h) => {
+      c.fillStyle = '#dfe3de'; c.fillRect(0, 0, w, h);
+      b.fillStyle = '#ffffff'; b.fillRect(0, 0, w, h);
+      const rows = 8, cols = 4, rh = h / rows, cw = w / cols;
+      c.strokeStyle = '#8e948e'; c.lineWidth = 5;
+      b.strokeStyle = '#181818'; b.lineWidth = 7;
+      for (let r = 0; r < rows; r++) {
+        const y = r * rh;
+        c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke();
+        b.beginPath(); b.moveTo(0, y); b.lineTo(w, y); b.stroke();
+        const offset = (r % 2) * (cw / 2);
+        for (let cl = 0; cl <= cols; cl++) {
+          const x = (cl * cw + offset) % w;
+          c.beginPath(); c.moveTo(x, y); c.lineTo(x, y + rh); c.stroke();
+          b.beginPath(); b.moveTo(x, y); b.lineTo(x, y + rh); b.stroke();
+        }
+      }
+    }, { repeatX: 4, repeatY: 2, roughness: 0.26, bumpScale: 0.022 });
+
+    // (D) Kertas Dinding Corak Daun Pelepah (Ruang Tamu)
+    const matLeafWallpaper = createProceduralMaterial((c, b, w, h) => {
+      c.fillStyle = '#e5e7dc'; c.fillRect(0, 0, w, h);
+      b.fillStyle = '#909090'; b.fillRect(0, 0, w, h);
+      for (let i = 0; i < 26; i++) {
+        const x = (i % 5) * 105 + 35 + (Math.random() * 20 - 10);
+        const y = Math.floor(i / 5) * 105 + 30 + (Math.random() * 20 - 10);
+        const ang = (i % 2 === 0 ? 0.55 : -0.45);
+        c.save(); b.save();
+        c.translate(x, y); c.rotate(ang);
+        b.translate(x, y); b.rotate(ang);
+        c.strokeStyle = i % 3 === 0 ? '#6e7b68' : '#4a5348';
+        c.lineWidth = 2.5;
+        c.beginPath(); c.moveTo(0, -28); c.lineTo(0, 28); c.stroke();
+        for (let s = -22; s <= 22; s += 7) {
+          c.beginPath(); c.moveTo(0, s); c.lineTo(-14, s - 6); c.stroke();
+          c.beginPath(); c.moveTo(0, s); c.lineTo(14, s - 6); c.stroke();
+          b.strokeStyle = '#cccccc'; b.lineWidth = 2;
+          b.beginPath(); b.moveTo(0, s); b.lineTo(-14, s - 6); b.stroke();
+        }
+        c.restore(); b.restore();
+      }
+    }, { repeatX: 3, repeatY: 2, roughness: 0.65, bumpScale: 0.008 });
+
+    // (E) Panel Marmar Putih-Kelabu (Dinding TV & Sempadan Ruang Tamu)
+    const matMarble = createProceduralMaterial((c, b, w, h) => {
+      c.fillStyle = '#eceee9'; c.fillRect(0, 0, w, h);
+      b.fillStyle = '#d8d8d8'; b.fillRect(0, 0, w, h);
+      for (let v = 0; v < 14; v++) {
+        c.strokeStyle = `rgba(110,120,125,${0.18 + Math.random() * 0.22})`;
+        c.lineWidth = 2 + Math.random() * 6;
+        c.beginPath();
+        let x = Math.random() * w, y = 0;
+        c.moveTo(x, y);
+        while (y < h) {
+          y += 32;
+          x += (Math.random() - 0.5) * 55;
+          c.lineTo(x, y);
+        }
+        c.stroke();
+      }
+    }, { repeatX: 2, repeatY: 2, roughness: 0.18, metalness: 0.05, bumpScale: 0.006 });
+
+    // (F) Panel Jalur Kayu Menegak (Fluted Panel Ruang Tamu)
+    const matFlutedPanel = createProceduralMaterial((c, b, w, h) => {
+      const stripes = 18, sw = w / stripes;
+      for (let i = 0; i < stripes; i++) {
+        c.fillStyle = i % 2 === 0 ? '#6e6a61' : '#3a3833';
+        c.fillRect(i * sw, 0, sw, h);
+        b.fillStyle = i % 2 === 0 ? '#ffffff' : '#202020';
+        b.fillRect(i * sw, 0, sw, h);
+      }
+    }, { repeatX: 1, repeatY: 1, roughness: 0.48, bumpScale: 0.035 });
+
+    // (G) Urat Kayu Perabot & Pintu
+    const matWood = (hexBase = '#7a4928', hexDark = '#4e2c14') => createProceduralMaterial((c, b, w, h) => {
+      c.fillStyle = hexBase; c.fillRect(0, 0, w, h);
+      b.fillStyle = '#888888'; b.fillRect(0, 0, w, h);
+      for (let i = 0; i < 70; i++) {
+        const y = Math.random() * h;
+        c.strokeStyle = hexDark; c.globalAlpha = 0.22; c.lineWidth = 1 + Math.random() * 4;
+        c.beginPath(); c.moveTo(0, y);
+        c.bezierCurveTo(w * 0.3, y + 12, w * 0.7, y - 12, w, y); c.stroke();
+        b.strokeStyle = '#444444'; b.lineWidth = 2;
+        b.beginPath(); b.moveTo(0, y); b.lineTo(w, y); b.stroke();
+      }
+      c.globalAlpha = 1;
+    }, { repeatX: 1, repeatY: 1, roughness: 0.42, bumpScale: 0.016 });
+
+    // (H) Lantai Kayu Kelabu Gelap (Laluan Tepi Bilik Air)
+    const matDarkGreyWood = matWood('#4b4e50', '#232527');
+
+    // (I) Cat Dinding & Simen Bertekstur Halus
+    const matPlaster = (colorHex, rough = 0.78) => createProceduralMaterial((c, b, w, h) => {
+      c.fillStyle = colorHex; c.fillRect(0, 0, w, h);
+      b.fillStyle = '#808080'; b.fillRect(0, 0, w, h);
+      for (let i = 0; i < 2200; i++) {
+        const x = Math.random() * w, y = Math.random() * h;
+        const v = Math.floor(110 + Math.random() * 40);
+        b.fillStyle = `rgb(${v},${v},${v})`;
+        b.fillRect(x, y, 3, 3);
+      }
+    }, { repeatX: 2, repeatY: 2, roughness: rough, bumpScale: 0.01 });
+
+    const matWallCream = matPlaster('#ecebe4');
+    const matWallLime = matPlaster('#c5dc3b', 0.65); // Dinding kuning-hijau ikonik dalam video
+    const matConcreteAged = matPlaster('#9e9583', 0.9);
+    const matWhiteCabinet = new THREE.MeshStandardMaterial({ color: 0xf1f3f2, roughness: 0.3, metalness: 0.05 });
+    const matDarkGlass = new THREE.MeshStandardMaterial({ color: 0x0d1014, roughness: 0.08, metalness: 0.75 });
+    const matSteel = new THREE.MeshStandardMaterial({ color: 0xbac2c9, roughness: 0.25, metalness: 0.85 });
+    const matBlackMetal = new THREE.MeshStandardMaterial({ color: 0x1e2226, roughness: 0.35, metalness: 0.65 });
+
+    // =========================================================
+    // 3. PEMBINA GEOMETRI & SISTEM COLLISION DINDING
+    // =========================================================
+    const colliders = [];
+
+    function addBox(w, h, d, x, y, z, material, collide = true, cast = true) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = cast;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+      if (collide) {
+        colliders.push(new THREE.Box3().setFromCenterAndSize(
+          new THREE.Vector3(x, y, z),
+          new THREE.Vector3(w, h, d)
+        ));
+      }
+      return mesh;
+    }
+
+    const H = 2.95; // Tinggi siling
+
+    // =========================================================
+    // ZON 1: DAPUR (x: -3.2 ke 3.2, z: 1.5 ke 7.2)
+    // =========================================================
+    addBox(6.4, 0.1, 5.7, 0, -0.05, 4.35, matWhiteTile(7, 6, 0.25), false, false); // Lantai jubin putih dapur
+    addBox(6.4, 0.1, 5.7, 0, H + 0.05, 4.35, matWallCream, false, false); // Siling dapur
+
+    // Dinding belakang dapur (z = 7.2) + Backsplash jubin bata putih
+    addBox(6.4, H, 0.18, 0, H / 2, 7.2, matWallCream);
+    addBox(6.2, 1.45, 0.03, 0, 1.35, 7.09, matSubwayTile, false, false);
+
+    // Tingkap gelangsar hitam di atas sinki + Rak pinggan hitam
+    addBox(1.85, 1.05, 0.08, -0.35, 1.65, 7.06, matDarkGlass, false);
+    addBox(1.9, 0.04, 0.28, -0.35, 1.35, 6.95, matBlackMetal, false);
+    addBox(1.9, 0.04, 0.28, -0.35, 1.72, 6.95, matBlackMetal, false);
+
+    // Dinding kiri dapur (x = -3.2) - Backsplash + Lubang ekzos bulat + Pintu belakang & Pintu tepi
+    addBox(0.18, H, 4.1, -3.2, H / 2, 5.15, matWallCream);
+    addBox(0.03, 1.4, 2.5, -3.09, 1.35, 5.8, matSubwayTile, false, false);
+    const ventHole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.06, 24), matConcreteAged);
+    ventHole.rotation.z = Math.PI / 2;
+    ventHole.position.set(-3.07, 2.08, 5.75);
+    scene.add(ventHole);
+
+    // Pintu kayu belakang (dengan kuali tergantung ikut video 00:04)
+    addBox(0.08, 2.1, 0.95, -3.12, 1.05, 3.85, matWood('#7c431e', '#4b240c'));
+    const wok = new THREE.Mesh(new THREE.SphereGeometry(0.24, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.42), matSteel);
+    wok.rotation.z = -Math.PI / 2;
+    wok.position.set(-3.02, 1.62, 3.85);
+    scene.add(wok);
+
+    // Bukaan pintu berbingkai merah ke Koridor Tepi (x = -3.2, z = 2.0..2.9)
+    addBox(0.22, 0.75, 1.1, -3.2, 2.58, 2.45, matWallCream, false);
+    addBox(0.22, 2.2, 0.08, -3.2, 1.1, 1.95, new THREE.MeshStandardMaterial({ color: 0x8e2424, roughness: 0.5 }));
+    addBox(0.22, 2.2, 0.08, -3.2, 1.1, 2.95, new THREE.MeshStandardMaterial({ color: 0x8e2424, roughness: 0.5 }));
+
+    // Dinding kanan dapur (x = 3.2)
+    addBox(0.18, H, 5.7, 3.2, H / 2, 4.35, matWallCream);
+
+    // Tabletop Konkrit Bentuk-U/L (Kiri: Dapur Gas, Belakang: Sinki, Kanan: Meja Penyediaan)
+    const matCounter = matPlaster('#cfd3ce', 0.4);
+    // Kiri (Dapur memasak + Tong Gas Hijau di bawah)
+    addBox(0.68, 0.08, 1.6, -2.76, 0.86, 6.25, matCounter);
+    addBox(0.62, 0.1, 0.78, -2.75, 0.93, 6.15, matBlackMetal, false); // Dapur gas 2 tungku
+    const gasTank = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.56, 18), new THREE.MeshStandardMaterial({ color: 0x1ca37b, roughness: 0.4 }));
+    gasTank.position.set(-2.75, 0.28, 6.68);
+    scene.add(gasTank);
+
+    // Belakang (Sinki Berkembar)
+    addBox(5.1, 0.08, 0.68, 0.0, 0.86, 6.76, matCounter);
+    addBox(1.15, 0.03, 0.48, -0.35, 0.91, 6.75, matSteel, false); // Sinki keluli
+
+    // Kanan (Kaunter panjang + Periuk nasi ungu + Kabinet gantung kaca hitam)
+    addBox(0.68, 0.08, 3.6, 2.76, 0.86, 5.2, matCounter);
+    addBox(0.68, 0.86, 0.08, 2.76, 0.43, 3.42, matCounter);
+    const riceCooker = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.24, 18), new THREE.MeshStandardMaterial({ color: 0xb388eb, roughness: 0.3 }));
+    riceCooker.position.set(2.75, 1.02, 3.85);
+    scene.add(riceCooker);
+
+    // Kabinet Gantung Kaca Gelap Berbingkai Putih (Kanan & Belakang)
+    addBox(0.38, 0.92, 2.6, 2.92, 2.08, 5.3, matWhiteCabinet, false);
+    addBox(0.03, 0.82, 2.45, 2.72, 2.08, 5.3, matDarkGlass, false);
+    addBox(1.35, 0.92, 0.38, 1.65, 2.08, 6.92, matWhiteCabinet, false);
+    addBox(1.22, 0.82, 0.03, 1.65, 2.08, 6.72, matDarkGlass, false);
+
+    // Dinding Pembahagi Dapur ke Ruang Tengah (z = 1.5) dengan Bukaan Laluan (x: -0.3 ke 0.9)
+    addBox(2.9, H, 0.18, -1.75, H / 2, 1.5, matWallCream);
+    addBox(2.3, H, 0.18, 2.05, H / 2, 1.5, matWallCream);
+    addBox(1.2, 0.75, 0.18, 0.3, 2.58, 1.5, matWallCream, false);
+
+    // Deretan Almari Putih 2-Tingkat & Peti Sejuk Kelabu Gelap (Video 00:02 - 00:03)
+    addBox(0.92, 1.95, 0.56, 1.42, 0.98, 1.88, matWhiteCabinet);
+    addBox(0.92, 1.95, 0.56, 2.36, 0.98, 1.88, matWhiteCabinet);
+    addBox(0.75, 1.78, 0.72, -2.55, 0.89, 2.95, new THREE.MeshStandardMaterial({ color: 0x595e63, roughness: 0.25, metalness: 0.6 })); // Peti sejuk dapur
+
+    // =========================================================
+    // ZON 2: RUANG TENGAH / MAKAN & KERJA (x: -1.6 ke 3.2, z: -5.8 ke 1.5)
+    // =========================================================
+    addBox(4.8, 0.1, 7.3, 0.8, -0.05, -2.15, matOrangeFloor, false, false);
+    addBox(4.8, 0.1, 7.3, 0.8, H + 0.05, -2.15, matWallCream, false, false);
+    addBox(0.18, H, 7.3, 3.2, H / 2, -2.15, matWallCream);
+    addBox(4.8, H, 0.18, 0.8, H / 2, -5.8, matWallCream);
+
+    // Dinding Tiang Kuning Limau Terang + Peti Sejuk Hitam + Meja Lipat (Video 00:16 - 00:21)
+    addBox(1.15, H, 0.22, -0.95, H / 2, -1.15, matWallLime);
+    addBox(0.72, 1.68, 0.72, -0.95, 0.84, -1.68, matBlackMetal); // Peti sejuk hitam
+    addBox(0.95, 0.05, 0.6, -0.95, 0.76, -0.68, matMarble); // Meja lipat putih marmar
+    addBox(0.05, 0.75, 0.52, -1.32, 0.38, -0.68, matSteel, false);
+    addBox(0.05, 0.75, 0.52, -0.58, 0.38, -0.68, matSteel, false);
+
+    // Rak Buku Kayu & Meja Kerja + Aircond + Langsir Putih (Video 00:42 - 00:50)
+    addBox(1.1, 1.85, 0.38, 0.55, 0.93, -5.52, matWood('#8b5a2b', '#5c3816')); // Rak buku
+    addBox(1.45, 0.78, 0.72, 1.95, 0.39, -4.55, matPlaster('#9ea3a8', 0.5)); // Meja kerja
+    addBox(0.95, 0.28, 0.24, 2.05, 2.55, -5.62, matWhiteCabinet, false); // Unit Aircond
+    addBox(1.5, 1.75, 0.05, 2.05, 1.48, -5.68, matPlaster('#f2f4f7', 0.85), false); // Langsir putih
+
+    // Kabinet Ketuhar (Oven/Microwave) & Pintu Bilik Air Kelabu (Video 00:59 - 01:01)
+    addBox(0.95, 0.92, 0.48, 2.62, 0.46, 0.55, matWood('#5a3b25', '#362112'));
+    addBox(0.46, 0.3, 0.36, 2.62, 1.07, 0.55, matBlackMetal, false); // Ketuhar hitam
+    addBox(0.06, 2.05, 0.82, 3.08, 1.02, -0.55, new THREE.MeshStandardMaterial({ color: 0xb8bec4, roughness: 0.35, metalness: 0.35 }), false);
+
+    // =========================================================
+    // ZON 3: RUANG TAMU UTAMA (x: -6.8 ke -1.6, z: -6.6 ke -1.0)
+    // =========================================================
+    addBox(5.2, 0.1, 5.6, -4.2, -0.05, -3.8, matWhiteTile(6, 6, 0.14), false, false); // Jubin putih berkilat
+    addBox(5.2, 0.1, 5.6, -4.2, H + 0.05, -3.8, matWallCream, false, false);
+
+    // Plaster Siling Bertingkat (Tray Ceiling) + Lampu Chandelier Tengah (Video 00:24 - 00:27)
+    addBox(3.6, 0.12, 3.8, -4.2, H - 0.06, -3.8, matWallCream, false, false);
+    const chandelier = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.12, 0.28, 16), new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.7, roughness: 0.3 }));
+    chandelier.position.set(-4.2, H - 0.25, -3.8);
+    scene.add(chandelier);
+
+    // Sempadan Gerbang Marmar Antara Ruang Tengah & Ruang Tamu
+    addBox(0.22, H, 1.3, -1.6, H / 2, -5.95, matMarble);
+    addBox(0.22, 0.55, 4.3, -1.6, H - 0.27, -3.15, matMarble, false);
+
+    // Dinding Hadapan Ruang Tamu (x = -6.8): Kertas Dinding Daun + Jalur Fluted + Tingkap Langsir + Pintu Utama
+    addBox(0.18, H, 5.6, -6.8, H / 2, -3.8, matLeafWallpaper);
+    addBox(0.04, H, 0.55, -6.69, H / 2, -2.55, matFlutedPanel, false);
+    addBox(0.04, H, 0.55, -6.69, H / 2, -5.15, matFlutedPanel, false);
+    addBox(0.05, H, 1.35, -6.69, H / 2, -1.68, matWallLime, false); // Bahagian dinding kuning-hijau di pintu utama
+    addBox(0.08, 2.15, 0.96, -6.66, 1.08, -1.68, matWood('#3b2416', '#1f120a'), false); // Pintu utama kayu gelap
+    // Langsir tingkap ruang tamu
+    addBox(0.08, 2.25, 1.85, -6.64, 1.38, -3.85, matPlaster('#eef0f2', 0.85), false);
+    addBox(0.1, 2.3, 0.35, -6.61, 1.38, -2.95, matPlaster('#5a4232', 0.8), false);
+    addBox(0.1, 2.3, 0.35, -6.61, 1.38, -4.75, matPlaster('#5a4232', 0.8), false);
+
+    // Dinding Kiri Ruang Tamu (z = -6.6): Tingkap Kedua & Kerusi Kayu Berkusyen
+    addBox(5.2, H, 0.18, -4.2, H / 2, -6.6, matLeafWallpaper);
+    addBox(1.6, 1.5, 0.08, -5.1, 1.55, -6.48, matDarkGlass, false);
+
+    // Dinding TV (z = -1.0): Panel Marmar + Bingkai Kayu + Kabinet TV Gantung + TV Skrin Rata + Meja PC (Video 00:31 - 00:36)
+    addBox(5.2, H, 0.18, -4.2, H / 2, -1.0, matMarble);
+    addBox(1.85, 2.35, 0.05, -4.55, 1.35, -1.12, matMarble, false);
+    addBox(1.75, 0.42, 0.36, -4.55, 0.72, -1.28, matWood('#6b4226', '#3d2312')); // Kabinet gantung bawah TV
+    addBox(1.38, 0.82, 0.06, -4.55, 1.62, -1.16, matDarkGlass, false); // TV Skrin Rata
+    // Meja PC & Kerusi Pejabat Hitam di sebelah TV
+    addBox(1.15, 0.76, 0.58, -2.75, 0.38, -1.42, matWhiteCabinet);
+    addBox(0.55, 1.05, 0.55, -2.75, 0.52, -2.02, matBlackMetal);
+
+    // Sofa Panjang (berhadapan TV) & 2 Kerusi Kayu Ruang Tamu (Video 00:22 & 00:31)
+    const matCushion = matPlaster('#b69268', 0.75);
+    addBox(2.25, 0.45, 0.82, -3.55, 0.23, -5.85, matCushion); // Tempat duduk sofa
+    addBox(2.25, 0.52, 0.22, -3.55, 0.68, -6.18, matCushion); // Sandaran sofa
+    // Dua kerusi kayu di tepi dinding
+    [-5.85, -4.85].forEach(zPos => {
+      addBox(0.62, 0.44, 0.62, -6.15, 0.22, zPos, matWood('#b87435', '#7d4a1b'));
+      addBox(0.12, 0.55, 0.62, -6.41, 0.68, zPos, matWood('#b87435', '#7d4a1b'));
+    });
+
+    // =========================================================
+    // ZON 4: KORIDOR TEPI & BILIK AIR BELAKANG (x: -5.8 ke -3.2, z: 1.6 ke 7.2)
+    // =========================================================
+    addBox(2.6, 0.1, 5.6, -4.5, -0.05, 4.4, matDarkGreyWood, false, false); // Lantai corak kayu kelabu gelap
+    addBox(2.6, 0.1, 5.6, -4.5, H + 0.05, 4.4, matWallCream, false, false);
+    addBox(0.18, H, 5.6, -5.8, H / 2, 4.4, matConcreteAged);
+    addBox(2.6, H, 0.18, -4.5, H / 2, 1.6, matWallCream);
+    addBox(2.6, H, 0.18, -4.5, H / 2, 7.2, matConcreteAged);
+    // Dinding pemisah bilik air hujung + Baldi merah (Video 01:15 - 01:18)
+    addBox(1.5, 2.2, 0.14, -5.05, 1.1, 5.45, matConcreteAged);
+    const redBucket = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.36, 16), new THREE.MeshStandardMaterial({ color: 0xd81b60, roughness: 0.35 }));
+    redBucket.position.set(-4.65, 0.18, 6.45);
+    scene.add(redBucket);
+
+    // =========================================================
+    // 4. PENCAHAYAAN SINEMATIK IKUT RUANG SEBENAR
+    // =========================================================
+    const hemiLight = new THREE.HemisphereLight(0xf6f8ff, 0x3b352c, 0.55);
+    scene.add(hemiLight);
+
+    function addCeilingLight(x, z, color = 0xfff6e5, intensity = 7.5, dist = 9.5, castShadow = false) {
+      const light = new THREE.PointLight(color, intensity, dist, 1.7);
+      light.position.set(x, H - 0.22, z);
+      if (castShadow) {
+        light.castShadow = true;
+        light.shadow.mapSize.set(1024, 1024);
+        light.shadow.bias = -0.002;
+      }
+      scene.add(light);
+
+      const bulb = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 0.03, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      bulb.position.set(x, H - 0.02, z);
+      scene.add(bulb);
+    }
+
+    addCeilingLight(0, 4.4, 0xf2f7ff, 9.0, 11, true);        // Lampu utama Dapur
+    addCeilingLight(0.6, -2.2, 0xfff2dc, 8.0, 11, false);    // Lampu Ruang Tengah
+    addCeilingLight(-4.2, -3.8, 0xfff4e0, 10.5, 12, true);   // Downlight Ruang Tamu
+    addCeilingLight(-4.5, 4.2, 0xfff0d6, 5.5, 8, false);     // Lampu Koridor Tepi
+
+    // =========================================================
+    // 5. KAWALAN PEMAIN FIRST-PERSON + JOYSTICK + HEAD-BOB
+    // =========================================================
+    const player = {
+      pos: new THREE.Vector3(0, 1.62, 4.2), // Bermula di tengah Dapur (seperti permulaan video)
+      yaw: 0,
+      pitch: 0,
+      radius: 0.32,
+      speed: 2.85,
+      walkTime: 0
+    };
+    camera.position.copy(player.pos);
+
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    // Pointer Lock untuk PC
+    renderer.domElement.addEventListener('click', () => {
+      if (window.innerWidth > 768 && document.pointerLockElement !== renderer.domElement) {
+        renderer.domElement.requestPointerLock?.();
+      }
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (document.pointerLockElement === renderer.domElement) {
+        player.yaw -= e.movementX * 0.0022;
+        player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch - e.movementY * 0.0022));
+      }
+    });
+
+    // Butang Lompat Pantas Antara Ruang
+    document.querySelectorAll('.tp-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const [x, y, z, yaw] = btn.dataset.pos.split(',').map(Number);
+        player.pos.set(x, y, z);
+        player.yaw = yaw;
+        player.pitch = 0;
+      });
+    });
+
+    // Joystick Sentuh (Kiri) & Pandangan Kamera (Kanan)
+    const joyZone = document.getElementById('joyZone');
+    const joyKnob = document.getElementById('joyKnob');
+    const joyVec = { x: 0, y: 0 };
+    let joyTouchId = null;
+
+    joyZone.addEventListener('touchstart', e => {
+      const t = e.changedTouches[0];
+      joyTouchId = t.identifier;
+      updateJoy(t);
+    }, { passive: false });
+
+    joyZone.addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === joyTouchId) updateJoy(t);
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    const resetJoy = e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === joyTouchId) {
+          joyTouchId = null;
+          joyVec.x = joyVec.y = 0;
+          joyKnob.style.transform = `translate(0px, 0px)`;
+        }
+      }
+    };
+    joyZone.addEventListener('touchend', resetJoy);
+    joyZone.addEventListener('touchcancel', resetJoy);
+
+    function updateJoy(touch) {
+      const rect = joyZone.getBoundingClientRect();
+      const dx = touch.clientX - (rect.left + rect.width / 2);
+      const dy = touch.clientY - (rect.top + rect.height / 2);
+      const maxR = 38;
+      const dist = Math.min(Math.hypot(dx, dy), maxR);
+      const ang = Math.atan2(dy, dx);
+      const kx = Math.cos(ang) * dist, ky = Math.sin(ang) * dist;
+      joyKnob.style.transform = `translate(${kx}px, ${ky}px)`;
+      joyVec.x = kx / maxR;
+      joyVec.y = ky / maxR;
+    }
+
+    const lookZone = document.getElementById('lookZone');
+    let lookTouchId = null, lastLX = 0, lastLY = 0;
+    lookZone.addEventListener('touchstart', e => {
+      const t = e.changedTouches[0];
+      lookTouchId = t.identifier;
+      lastLX = t.clientX; lastLY = t.clientY;
+    });
+    lookZone.addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === lookTouchId) {
+          player.yaw -= (t.clientX - lastLX) * 0.005;
+          player.pitch = Math.max(-1.3, Math.min(1.3, player.pitch - (t.clientY - lastLY) * 0.005));
+   
